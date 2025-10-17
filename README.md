@@ -1,5 +1,7 @@
 # Visma InSchool pdf to .ics timetable
-Python script that makes a .ics iCalander file with the timetable in it from the Visma InSchool timetable. 
+Python script that makes a .ics iCalander file with the timetable in it from a Visma InSchool timetable pdf. 
+
+The pdf needs to be manually downloaded from Visma InSchool.
 
 Script currently known working with google calendar. 
 

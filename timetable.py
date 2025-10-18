@@ -72,8 +72,6 @@ pdf_text = "".join(doc[0].get_text())
 lines = pdf_text.splitlines() # Split the text into lines for processing
 # Each lesson is assumed to span 4 lines: time | location, subject, code, type
 
-print(lines)
-
 # Remove the days of the week on the top of the document
 for a in range(5):
     lines.pop(0)
@@ -153,6 +151,7 @@ while a < len(lines) - 1:
                 # Show info about event
                 current_event.showInfo()
 
+                # Generate vevent block
                 vevent = [
                     "BEGIN:VEVENT",
                     f"SUMMARY:{current_event.subject}",
@@ -176,7 +175,7 @@ while a < len(lines) - 1:
         continue
     except Exception as e:
         # only print unexpected errors
-        print(f"[Line {a}] Unexpected error: {e}")
+        print("Error: {e}")
         a += 1
 
 # Finalize the calendar

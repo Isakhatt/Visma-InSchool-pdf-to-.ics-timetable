@@ -1,3 +1,5 @@
+import sys
+from copy import deepcopy
 import pymupdf
 import datetime
 from uuid import uuid4
@@ -57,17 +59,21 @@ def timeconvert(visma_time: str, visma_date: str) -> str:
 root = tk.Tk()
 root.withdraw()
 
-# Define the timezone to be used in the iCalendar file
+# Define the timezone to be used in the iCalendar file. https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 # TIMEZONE = "Europe/Oslo"
-TIMEZONE = simpledialog.askstring('Input', 'Please enter timezone (for example Europe/Oslo): ')
+TIMEZONE = simpledialog.askstring('Input', 'Please enter timezone (for example Europe/Oslo, list of timezones: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones): ')
 
 # Define the input PDF file path
-pdf_path = filedialog.askopenfilename(title='Select the downloaded timetable from Visma InSchool')
+pdf_path = filedialog.askopenfilename(title='Select the downloaded timetable from Visma InSchool', filetypes={("pdf", ".pdf")})
 
 
-# Read the PDF and extract text
-doc = pymupdf.open(pdf_path)
-pdf_text = "".join(doc[0].get_text())
+# Read the PDF and extract text. Stop if no pdf is selected
+try:
+    doc = pymupdf.open(pdf_path)
+    pdf_text = "".join(doc[0].get_text())
+except Exception as e:
+    sys.exit(f"Exiting: {e}")
+
 
 lines = pdf_text.splitlines() # Split the text into lines for processing
 # Each lesson is assumed to span 4 lines: time | location, subject, code, type
@@ -87,6 +93,7 @@ timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.u
 ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n' # Initialize the iCalendar content
 
 # Define values
+prev_prev_event = None
 prev_event = VeventBlock("00:00", "23:59", "", "")
 next_event = None
 
@@ -135,7 +142,14 @@ while a < len(lines) - 1:
                     current_event.end_time = next_event.end_time
 
                 # Defines previous event as this one (this event will be written over)
-                prev_event = current_event
+                if prev_prev_event == None:
+                    prev_prev_event = deepcopy(current_event)
+                    prev_prev_event.start_time = "00:00"
+                    prev_prev_event.end_time = "00:00"
+                else:
+                    prev_prev_event = deepcopy(prev_event)
+                prev_event = deepcopy(current_event)
+                
 
                 # Add 45 minutes if the class is 45 minutes long and the last of the day or the last day of the timetable. This is in case the pdf is longer than 1 page and follows the class system of Norwegian high schools
                 # Seeing if there is not a next event block in the list first (in case there is an error reading the next event of the block that does not exist)
@@ -149,24 +163,37 @@ while a < len(lines) - 1:
 
 
                 # Show info about event
-                current_event.showInfo()
+                # current_event.showInfo()
 
-                # Generate vevent block
-                vevent = [
-                    "BEGIN:VEVENT",
-                    f"SUMMARY:{current_event.subject}",
-                    f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                    f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                    f"LOCATION:{location.strip()}",
-                    f"UID:fromvisma_{uuid4()}",
-                    f"DTSTAMP:{timestamp}",
-                    "BEGIN:VALARM",
-                    "TRIGGER:-PT15M",
-                    "ACTION:DISPLAY",
-                    "DESCRIPTION:Reminder",
-                    "END:VALARM",
-                    "END:VEVENT\r\n"
-                ]
+                # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
+                current_event.showInfo()
+                if current_event.start_time != prev_prev_event.end_time and current_event.start_time != prev_prev_event.start_time: 
+                    vevent = [
+                        "BEGIN:VEVENT",
+                        f"SUMMARY:{current_event.subject}",
+                        f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                        f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                        f"LOCATION:{location.strip()}",
+                        f"UID:fromvisma_{uuid4()}",
+                        f"DTSTAMP:{timestamp}",
+                        "BEGIN:VALARM",
+                        f"TRIGGER:-PT15M", # Alarm starts 15 min before
+                        "ACTION:DISPLAY",
+                        "DESCRIPTION:Reminder",
+                        "END:VALARM",
+                        "END:VEVENT\r\n"
+                    ]
+                else:
+                    vevent = [
+                        "BEGIN:VEVENT",
+                        f"SUMMARY:{current_event.subject}",
+                        f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                        f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                        f"LOCATION:{location.strip()}",
+                        f"UID:fromvisma_{uuid4()}",
+                        f"DTSTAMP:{timestamp}",
+                        "END:VEVENT\r\n"
+                    ]
                 ical += "\r\n".join(vevent) # Adds the block to the file
                 a += 1
     except ValueError as e:
@@ -189,4 +216,3 @@ output_filename = filedialog.asksaveasfilename(
 )
 with open(output_filename, "w") as f:
     f.write(ical)
-    

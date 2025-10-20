@@ -1,10 +1,12 @@
 import sys
+import pytz
 from copy import deepcopy
 import pymupdf
 import datetime
 from uuid import uuid4
 import tkinter as tk
-from tkinter import simpledialog, filedialog
+from tkinter import filedialog, ttk
+from tzlocal import get_localzone
 
 class VeventBlock:
     def __init__(self, start_time: str, end_time: str, location: str, subject: str):
@@ -55,13 +57,40 @@ def timeconvert(visma_time: str, visma_date: str) -> str:
     return datetime.datetime.strftime(fulltime, r'%Y%m%dT%H%M%S')
 
 
+
 # Initialize the tk window
 root = tk.Tk()
-root.withdraw()
+root.geometry("250x150")
+root.title("Select Timezone")
 
-# Define the timezone to be used in the iCalendar file. https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-# TIMEZONE = "Europe/Oslo"
-TIMEZONE = simpledialog.askstring('Input', 'Please enter timezone (for example Europe/Oslo, list of timezones: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones): ')
+# Define the timezone combobox
+cb = ttk.Combobox(root, values=pytz.common_timezones, width=30)
+cb.set(str(get_localzone()))  # default value
+cb.pack(pady=10)
+
+# Label for status messages
+lbl = tk.Label(root, text="Please select your timezone.")
+lbl.pack(pady=5)
+
+# Variable to store the selected timezone
+TIMEZONE = None
+
+def confirm_timezone():
+    """Save the timezone and close the window."""
+    global TIMEZONE
+    TIMEZONE = cb.get()
+    print(f"Selected timezone: {TIMEZONE}")  # or handle it elsewhere
+    root.destroy()  # closes the window and allows program to continue
+
+# Confirm button
+tk.Button(root, text="Confirm", command=confirm_timezone).pack(pady=10)
+
+# Start the GUI loop
+root.mainloop()
+
+# Program continues after window is closed
+print(f"Using timezone: {TIMEZONE}")
+
 
 # Define the input PDF file path
 pdf_path = filedialog.askopenfilename(title='Select the downloaded timetable from Visma InSchool', filetypes={("pdf", ".pdf")})

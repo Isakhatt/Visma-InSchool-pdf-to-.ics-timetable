@@ -115,11 +115,14 @@ download_date = datetime.datetime.strptime(lines[-1][-10:], '%d.%m.%Y') # Define
 
 lines.pop(-1) # Remove the last line
 
-current_date = download_date - datetime.timedelta(days=download_date.weekday()) # Find difference between the download date and the one the first lesson is on.
+# Find difference between the download date and the one the first lesson is on.
+current_date = download_date - datetime.timedelta(days=download_date.weekday()) 
 
-timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.utc), r'%Y%m%dT%H%M%SZ') # Prepare timestamp for DTSTAMP field (convert to right format)
+# Prepare timestamp for DTSTAMP field (convert to right format)
+timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.utc), r'%Y%m%dT%H%M%SZ') 
 
-ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n' # Initialize the iCalendar content
+# Initialize the iCalendar content
+ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n' 
 
 # Define values
 prev_prev_event = None

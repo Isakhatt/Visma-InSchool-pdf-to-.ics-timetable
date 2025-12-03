@@ -1,7 +1,3 @@
-# TODO
-# Only be realiant on the two lines: time | location, subject
-# Create diagram for the program
-
 import sys
 import pytz
 from copy import deepcopy

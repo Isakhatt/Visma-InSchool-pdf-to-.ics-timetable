@@ -1,3 +1,7 @@
+# TODO
+# Only be realiant on the two lines: time | location, subject
+# Create diagram for the program
+
 import sys
 import pytz
 from copy import deepcopy
@@ -127,7 +131,7 @@ ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r
 # Define values
 prev_prev_event = None
 prev_event = VeventBlock("00:00", "23:59", "", "")
-next_event = None
+next_event = prev_event
 
 # Main loop
 a = 0
@@ -159,6 +163,9 @@ while a < len(lines) - 1:
 
                             next_event = VeventBlock(start_time, end_time, location, subject)
                             b = len(lines)
+                        
+                        else:
+                            b += 1
                     except Exception:
                         b += 1
 
@@ -228,14 +235,20 @@ while a < len(lines) - 1:
                     ]
                 ical += "\r\n".join(vevent) # Adds the block to the file
                 a += 1
+        
+        else:
+            # If lines[a] isn't the correct time format, but still passes the if test
+            a += 1
     except ValueError as e:
-        # expected, happens on non-time lines
+        # Expected, happens on non-time lines
         a += 1
         continue
     except Exception as e:
-        # only print unexpected errors
+        # Unexpected errors
         print("Error: {e}")
         a += 1
+
+print("done")
 
 # Finalize the calendar
 ical += 'END:VCALENDAR\r\n'

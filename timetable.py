@@ -9,7 +9,7 @@ from tkinter import filedialog, ttk
 from tzlocal import get_localzone
 
 class VeventBlock:
-    def __init__(self, start_time: str, end_time: str, location: str, subject: str):
+    def __init__(self, start_time: str, end_time: str, location: str | None, subject: str):
         """
         Constructor
 
@@ -136,7 +136,13 @@ while a < len(lines) - 1:
     try: 
         if type(int(lines[a][0] + lines[a][1] + lines[a][3] + lines[a][4])) == int and lines[a][2] == ":":
             # Define location, start_time, end_time and subject
-            time_range, location = lines[a].split("|")
+            if "|" in lines[a]:
+                time_range, location = lines[a].split("|")
+                location = location.strip()
+            else:
+                time_range = lines[a]
+                location = None
+            
             start_time, end_time = [t.strip() for t in time_range.split("-")]
             subject = lines[a + 1].strip()
             
@@ -153,7 +159,12 @@ while a < len(lines) - 1:
                 while b < len(lines) - 1:
                     try:
                         if type(int(lines[b][0] + lines[b][1] + lines[b][3] + lines[b][4])) == int and lines[b][2] == ":":
-                            time_range, location = lines[b].split("|")
+                            if "|" in lines[b]:
+                                time_range, location = lines[b].split("|")
+                                location = location.strip()
+                            else:
+                                time_range = lines[b]
+                                location = None
                             start_time, end_time = [t.strip() for t in time_range.split("-")]
                             subject = lines[b + 1].strip()
 
@@ -169,7 +180,6 @@ while a < len(lines) - 1:
                 # Check if new day, if this start is less than previous. Defines start_times as integers representing the passed minutes since 00:00
                 if current_event.startMinutesPastMidnight() < prev_event.startMinutesPastMidnight():
                     current_date += datetime.timedelta(days=1)
-
 
                 # Check if next event is a continuation of the previous and has the same name
                 if current_event.end_time == next_event.start_time and current_event.subject == next_event.subject:
@@ -203,33 +213,65 @@ while a < len(lines) - 1:
                 # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
                 current_event.showInfo()
                 if current_event.start_time != prev_prev_event.end_time and current_event.start_time != prev_prev_event.start_time: 
-                    vevent = [
-                        "BEGIN:VEVENT",
-                        f"SUMMARY:{current_event.subject}",
-                        f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                        f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                        f"LOCATION:{location.strip()}",
-                        f"UID:fromvisma_{uuid4()}",
-                        f"DTSTAMP:{timestamp}",
-                        "BEGIN:VALARM",
-                        f"TRIGGER:-PT15M", # Alarm starts 15 min before
-                        "ACTION:DISPLAY",
-                        "DESCRIPTION:Reminder",
-                        "END:VALARM",
-                        "END:VEVENT\r\n"
-                    ]
+                    if type(current_event.location) == str:
+                        vevent = [
+                            "BEGIN:VEVENT",
+                            f"SUMMARY:{current_event.subject}",
+                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                            f"LOCATION:{current_event.location}",
+                            f"UID:fromvisma_{uuid4()}",
+                            f"DTSTAMP:{timestamp}",
+                            "BEGIN:VALARM",
+                            f"TRIGGER:-PT15M", # Alarm starts 15 min before
+                            "ACTION:DISPLAY",
+                            "DESCRIPTION:Reminder",
+                            "END:VALARM",
+                            "END:VEVENT\r\n"
+                        ]
+                    else:
+                        vevent = [
+                            "BEGIN:VEVENT",
+                            f"SUMMARY:{current_event.subject}",
+                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                            f"UID:fromvisma_{uuid4()}",
+                            f"DTSTAMP:{timestamp}",
+                            "BEGIN:VALARM",
+                            f"TRIGGER:-PT15M", # Alarm starts 15 min before
+                            "ACTION:DISPLAY",
+                            "DESCRIPTION:Reminder",
+                            "END:VALARM",
+                            "END:VEVENT\r\n"
+                        ]
                 else:
-                    vevent = [
-                        "BEGIN:VEVENT",
-                        f"SUMMARY:{current_event.subject}",
-                        f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                        f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                        f"LOCATION:{location.strip()}",
-                        f"UID:fromvisma_{uuid4()}",
-                        f"DTSTAMP:{timestamp}",
-                        "END:VEVENT\r\n"
-                    ]
+                    if type(current_event.location) == str:
+                        vevent = [
+                            "BEGIN:VEVENT",
+                            f"SUMMARY:{current_event.subject}",
+                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                            f"LOCATION:{current_event.location}",
+                            f"UID:fromvisma_{uuid4()}",
+                            f"DTSTAMP:{timestamp}",
+                            "END:VEVENT\r\n"
+                        ]
+                    else:
+                        vevent = [
+                            "BEGIN:VEVENT",
+                            f"SUMMARY:{current_event.subject}",
+                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                            f"UID:fromvisma_{uuid4()}",
+                            f"DTSTAMP:{timestamp}",
+                            "END:VEVENT\r\n"
+                        ]
                 ical += "\r\n".join(vevent) # Adds the block to the file
+
+                # Check if next event is a continuation of this one, if true then skip next event
+                if next_event.end_time == current_event.end_time and next_event.subject == current_event.subject:
+                    a += 4
+
                 a += 1
         
         else:

@@ -185,15 +185,6 @@ while a < len(lines) - 1:
                 if current_event.end_time == next_event.start_time and current_event.subject == next_event.subject:
                     # Extend the current event to the end of the next
                     current_event.end_time = next_event.end_time
-
-                # Defines previous event as this one (this event will be written over)
-                if prev_prev_event == None:
-                    prev_prev_event = deepcopy(current_event)
-                    prev_prev_event.start_time = "00:00"
-                    prev_prev_event.end_time = "00:00"
-                else:
-                    prev_prev_event = deepcopy(prev_event)
-                prev_event = deepcopy(current_event)
                 
 
                 # Add 45 minutes if the class is 45 minutes long and the last of the day or the last day of the timetable. This is in case the pdf is longer than 1 page and follows the class system of Norwegian high schools
@@ -212,7 +203,7 @@ while a < len(lines) - 1:
 
                 # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
                 current_event.showInfo()
-                if current_event.start_time != prev_prev_event.end_time and current_event.start_time != prev_prev_event.start_time: 
+                if current_event.start_time != prev_event.end_time and current_event.start_time != prev_event.start_time: 
                     if type(current_event.location) == str:
                         vevent = [
                             "BEGIN:VEVENT",
@@ -271,6 +262,9 @@ while a < len(lines) - 1:
                 # Check if next event is a continuation of this one, if true then skip next event
                 if next_event.end_time == current_event.end_time and next_event.subject == current_event.subject:
                     a += 4
+
+                # Define previous event
+                prev_event = deepcopy(current_event)
 
                 a += 1
         

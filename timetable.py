@@ -125,7 +125,6 @@ timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.u
 ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n' 
 
 # Define values
-prev_prev_event = None
 prev_event = VeventBlock("00:00", "23:59", "", "")
 next_event = prev_event
 

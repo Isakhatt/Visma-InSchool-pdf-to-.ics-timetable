@@ -134,14 +134,14 @@ start_date = datetime.datetime.strptime(header[-1], r'%d.%m.%Y') - datetime.time
 timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.utc), r'%Y%m%dT%H%M%SZ') 
 
 # Initialize the iCalendar content
-ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n' 
-
-# Define values
-prev_event = VeventBlock("00:00", "23:59", "", "")
-next_event = prev_event
+ical = 'BEGIN:VCALENDAR\r\nPRODID:-//Visma Inschool timetable to iCalendar//EN\r\nVERSION:2.0\r\n'
 
 # Main loop
 for i in range(5):
+    # Set previous and next event for comparisons
+    prev_event = VeventBlock("00:00", "00:01", "", "")
+    next_event = prev_event
+
     # Add days to start_date
     current_date = start_date + datetime.timedelta(days=i)
 
@@ -214,7 +214,7 @@ for i in range(5):
     
                     # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
                     current_event.showInfo()
-                    if current_event.start_time != prev_event.end_time and current_event.start_time != prev_event.start_time: 
+                    if current_event.start_time > prev_event.end_time:
                         if type(current_event.location) == str:
                             vevent = [
                                 "BEGIN:VEVENT",

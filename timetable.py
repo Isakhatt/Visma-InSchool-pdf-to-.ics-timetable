@@ -63,7 +63,7 @@ root = tk.Tk()
 root.geometry("250x150")
 root.title("Select Timezone")
 
-# Define the timezone combobox
+# Define the timezone box
 cb = ttk.Combobox(root, values=pytz.common_timezones, width=30)
 cb.set(str(get_localzone()))  # default value
 cb.pack(pady=10)
@@ -72,15 +72,13 @@ cb.pack(pady=10)
 lbl = tk.Label(root, text="Please select your timezone.")
 lbl.pack(pady=5)
 
-# Variable to store the selected timezone
 TIMEZONE = None
 
 def confirm_timezone():
     """Save the timezone and close the window."""
     global TIMEZONE
     TIMEZONE = cb.get()
-    print(f"Selected timezone: {TIMEZONE}")  # or handle it elsewhere
-    root.destroy()  # closes the window and allows program to continue
+    root.destroy()  # closes the window
 
 # Confirm button
 tk.Button(root, text="Confirm", command=confirm_timezone).pack(pady=10)
@@ -95,28 +93,43 @@ print(f"Using timezone: {TIMEZONE}")
 # Define the input PDF file path
 pdf_path = filedialog.askopenfilename(title='Select the downloaded timetable from Visma InSchool', filetypes={("pdf", ".pdf")})
 
-
 # Read the PDF and extract text. Stop if no pdf is selected
-try:
-    doc = pymupdf.open(pdf_path)
-    pdf_text = "".join(doc[0].get_text())
-except Exception as e:
-    sys.exit(f"Exiting: {e}")
+doc = pymupdf.open(pdf_path)
+
+lines = []
 
 
-lines = pdf_text.splitlines() # Split the text into lines for processing
-# Each lesson is assumed to span 4 lines: time | location, subject, code, type
+for i in range(len(doc)):
+    page: pymupdf.Page = doc[i]
 
-# Remove the days of the week on the top of the document
-for a in range(5):
-    lines.pop(0)
+    # Define columns to read text from, each representing their own weekday
+    page_rect = page.rect
+    width = page_rect.width
+    height = page_rect.height
+    rectangles = []
 
-download_date = datetime.datetime.strptime(lines[-1][-10:], '%d.%m.%Y') # Define download date (it is shown in Visma)
+    y = 50 # Distance from top to remove
 
-lines.pop(-1) # Remove the last line
+    rectangles.append(pymupdf.Rect(0, y, round(width/5), height))
+    rectangles.append(pymupdf.Rect(round(width/5), y, round(width/5)*2, height))
+    rectangles.append(pymupdf.Rect(round(width/5)*2, y, round(width/5)*3, height))
+    rectangles.append(pymupdf.Rect(round(width/5)*3, y, round(width/5)*4, height))
+    rectangles.append(pymupdf.Rect(round(width/5)*4, y, round(width/5)*5, height))
 
-# Find difference between the download date and the one the first lesson is on.
-current_date = download_date - datetime.timedelta(days=download_date.weekday()) 
+    for rect in rectangles:
+        text = page.get_textbox(rect)
+        lines.append(text.splitlines()) # Split the text into lines for processing
+        # Each lesson is assumed to span 4 lines: time | location, subject, code, type
+
+
+# Define first date in timetable
+page: pymupdf.Page = doc[0]
+page_rect = page.rect
+page_rect.y1 = 20
+header = page.get_textbox(page_rect)
+header = header.split(" - ")
+
+start_date = datetime.datetime.strptime(header[-1], r'%d.%m.%Y') - datetime.timedelta(days=datetime.datetime.strptime(header[-1], r'%d.%m.%Y').weekday())
 
 # Prepare timestamp for DTSTAMP field (convert to right format)
 timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.utc), r'%Y%m%dT%H%M%SZ') 
@@ -129,155 +142,155 @@ prev_event = VeventBlock("00:00", "23:59", "", "")
 next_event = prev_event
 
 # Main loop
-a = 0
-while a < len(lines) - 1:
-    # Check if the first four letters are in time format; two numbers, colon, two numbers
-    try: 
-        if type(int(lines[a][0] + lines[a][1] + lines[a][3] + lines[a][4])) == int and lines[a][2] == ":":
-            # Define location, start_time, end_time and subject
-            if "|" in lines[a]:
-                time_range, location = lines[a].split("|")
-                location = location.strip()
-            else:
-                time_range = lines[a]
-                location = None
-            
-            start_time, end_time = [t.strip() for t in time_range.split("-")]
-            subject = lines[a + 1].strip()
-            
-            # Instancing current event
-            current_event = VeventBlock(start_time, end_time, location, subject)
-            
-            # Check for duplicate event (after combining events)
-            if current_event.endMinutesPastMidnight() == prev_event.endMinutesPastMidnight() and current_event.subject == prev_event.subject:
-                a += 1
-            else: 
+for i in range(5):
+    # Add days to start_date
+    current_date = start_date + datetime.timedelta(days=i)
 
-                # Find next event block
-                b = a + 2
-                while b < len(lines) - 1:
-                    try:
-                        if type(int(lines[b][0] + lines[b][1] + lines[b][3] + lines[b][4])) == int and lines[b][2] == ":":
-                            if "|" in lines[b]:
-                                time_range, location = lines[b].split("|")
-                                location = location.strip()
-                            else:
-                                time_range = lines[b]
-                                location = None
-                            start_time, end_time = [t.strip() for t in time_range.split("-")]
-                            subject = lines[b + 1].strip()
-
-                            next_event = VeventBlock(start_time, end_time, location, subject)
-                            b = len(lines)
-                        
-                        else:
-                            b += 1
-                    except Exception:
-                        b += 1
-
-
-                # Check if new day, if this start is less than previous. Defines start_times as integers representing the passed minutes since 00:00
-                if current_event.startMinutesPastMidnight() < prev_event.startMinutesPastMidnight():
-                    current_date += datetime.timedelta(days=1)
-
-                # Check if next event is a continuation of the previous and has the same name
-                if current_event.end_time == next_event.start_time and current_event.subject == next_event.subject:
-                    # Extend the current event to the end of the next
-                    current_event.end_time = next_event.end_time
-                
-
-                # Add 45 minutes if the class is 45 minutes long and the last of the day or the last day of the timetable. This is in case the pdf is longer than 1 page and follows the class system of Norwegian high schools
-                # Seeing if there is not a next event block in the list first (in case there is an error reading the next event of the block that does not exist)
-                if len(lines) - a < 5:
-                    current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
-                elif next_event.start_time < current_event.start_time and current_event.endMinutesPastMidnight() - current_event.startMinutesPastMidnight() < 90:
-                    current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
-
-                # Defines date string in iCalendar format
-                date_str = current_date.strftime("%d.%m.%Y")
-
-
-                # Show info about event
-                # current_event.showInfo()
-
-                # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
-                current_event.showInfo()
-                if current_event.start_time != prev_event.end_time and current_event.start_time != prev_event.start_time: 
-                    if type(current_event.location) == str:
-                        vevent = [
-                            "BEGIN:VEVENT",
-                            f"SUMMARY:{current_event.subject}",
-                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                            f"LOCATION:{current_event.location}",
-                            f"UID:fromvisma_{uuid4()}",
-                            f"DTSTAMP:{timestamp}",
-                            "BEGIN:VALARM",
-                            f"TRIGGER:-PT15M", # Alarm starts 15 min before
-                            "ACTION:DISPLAY",
-                            "DESCRIPTION:Reminder",
-                            "END:VALARM",
-                            "END:VEVENT\r\n"
-                        ]
-                    else:
-                        vevent = [
-                            "BEGIN:VEVENT",
-                            f"SUMMARY:{current_event.subject}",
-                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                            f"UID:fromvisma_{uuid4()}",
-                            f"DTSTAMP:{timestamp}",
-                            "BEGIN:VALARM",
-                            f"TRIGGER:-PT15M", # Alarm starts 15 min before
-                            "ACTION:DISPLAY",
-                            "DESCRIPTION:Reminder",
-                            "END:VALARM",
-                            "END:VEVENT\r\n"
-                        ]
+    a = 0
+    while a < len(lines[i]) - 1:
+        # Check if the first four letters are in time format; two numbers, colon, two numbers
+        try: 
+            if type(int(lines[i][a][0] + lines[i][a][1] + lines[i][a][3] + lines[i][a][4])) == int and lines[i][a][2] == ":":
+                # Define location, start_time, end_time and subject
+                if "|" in lines[i][a]:
+                    time_range, location = lines[i][a].split("|")
+                    location = location.strip()
                 else:
-                    if type(current_event.location) == str:
-                        vevent = [
-                            "BEGIN:VEVENT",
-                            f"SUMMARY:{current_event.subject}",
-                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                            f"LOCATION:{current_event.location}",
-                            f"UID:fromvisma_{uuid4()}",
-                            f"DTSTAMP:{timestamp}",
-                            "END:VEVENT\r\n"
-                        ]
+                    time_range = lines[i][a]
+                    location = None
+                
+                start_time, end_time = [t.strip() for t in time_range.split("-")]
+                subject = lines[i][a + 1].strip()
+                
+                # Instancing current event
+                current_event = VeventBlock(start_time, end_time, location, subject)
+                
+                # Check for duplicate event (after combining events)
+                if current_event.endMinutesPastMidnight() == prev_event.endMinutesPastMidnight() and current_event.subject == prev_event.subject:
+                    a += 1
+                else: 
+    
+                    # Find next event block
+                    b = a + 2
+                    while b < len(lines[i]) - 1:
+                        try:
+                            if type(int(lines[i][b][0] + lines[i][b][1] + lines[i][b][3] + lines[i][b][4])) == int and lines[i][b][2] == ":":
+                                if "|" in lines[i][b]:
+                                    time_range, location = lines[i][b].split("|")
+                                    location = location.strip()
+                                else:
+                                    time_range = lines[i][b]
+                                    location = None
+                                start_time, end_time = [t.strip() for t in time_range.split("-")]
+                                subject = lines[i][b + 1].strip()
+    
+                                next_event = VeventBlock(start_time, end_time, location, subject)
+                                b = len(lines[i])
+                            
+                            else:
+                                b += 1
+                        except Exception:
+                            b += 1
+
+    
+                    # Check if next event is a continuation of the previous and has the same name
+                    if current_event.end_time == next_event.start_time and current_event.subject == next_event.subject:
+                        # Extend the current event to the end of the next
+                        current_event.end_time = next_event.end_time
+                    
+    
+                    # Add 45 minutes if the class is 45 minutes long and the last of the day or the last day of the timetable. This is in case the pdf is longer than 1 page and follows the class system of Norwegian high schools
+                    # Seeing if there is not a next event block in the list first (in case there is an error reading the next event of the block that does not exist)
+                    if len(lines[i]) - a < 5:
+                        current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
+                    elif next_event.start_time < current_event.start_time and current_event.endMinutesPastMidnight() - current_event.startMinutesPastMidnight() < 90:
+                        current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
+    
+                    # Defines date string in iCalendar format
+                    date_str = current_date.strftime("%d.%m.%Y")
+    
+    
+                    # Show info about event
+                    # current_event.showInfo()
+    
+                    # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
+                    current_event.showInfo()
+                    if current_event.start_time != prev_event.end_time and current_event.start_time != prev_event.start_time: 
+                        if type(current_event.location) == str:
+                            vevent = [
+                                "BEGIN:VEVENT",
+                                f"SUMMARY:{current_event.subject}",
+                                f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                                f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                                f"LOCATION:{current_event.location}",
+                                f"UID:fromvisma_{uuid4()}",
+                                f"DTSTAMP:{timestamp}",
+                                "BEGIN:VALARM",
+                                f"TRIGGER:-PT15M", # Alarm starts 15 min before
+                                "ACTION:DISPLAY",
+                                "DESCRIPTION:Reminder",
+                                "END:VALARM",
+                                "END:VEVENT\r\n"
+                            ]
+                        else:
+                            vevent = [
+                                "BEGIN:VEVENT",
+                                f"SUMMARY:{current_event.subject}",
+                                f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                                f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                                f"UID:fromvisma_{uuid4()}",
+                                f"DTSTAMP:{timestamp}",
+                                "BEGIN:VALARM",
+                                f"TRIGGER:-PT15M", # Alarm starts 15 min before
+                                "ACTION:DISPLAY",
+                                "DESCRIPTION:Reminder",
+                                "END:VALARM",
+                                "END:VEVENT\r\n"
+                            ]
                     else:
-                        vevent = [
-                            "BEGIN:VEVENT",
-                            f"SUMMARY:{current_event.subject}",
-                            f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
-                            f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
-                            f"UID:fromvisma_{uuid4()}",
-                            f"DTSTAMP:{timestamp}",
-                            "END:VEVENT\r\n"
-                        ]
-                ical += "\r\n".join(vevent) # Adds the block to the file
-
-                # Check if next event is a continuation of this one, if true then skip next event
-                if next_event.end_time == current_event.end_time and next_event.subject == current_event.subject:
-                    a += 4
-
-                # Define previous event
-                prev_event = deepcopy(current_event)
-
+                        if type(current_event.location) == str:
+                            vevent = [
+                                "BEGIN:VEVENT",
+                                f"SUMMARY:{current_event.subject}",
+                                f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                                f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                                f"LOCATION:{current_event.location}",
+                                f"UID:fromvisma_{uuid4()}",
+                                f"DTSTAMP:{timestamp}",
+                                "END:VEVENT\r\n"
+                            ]
+                        else:
+                            vevent = [
+                                "BEGIN:VEVENT",
+                                f"SUMMARY:{current_event.subject}",
+                                f"DTSTART;TZID={TIMEZONE}:{timeconvert(current_event.start_time, date_str)}",
+                                f"DTEND;TZID={TIMEZONE}:{timeconvert(current_event.end_time, date_str)}",
+                                f"UID:fromvisma_{uuid4()}",
+                                f"DTSTAMP:{timestamp}",
+                                "END:VEVENT\r\n"
+                            ]
+                    ical += "\r\n".join(vevent) # Adds the block to the file
+    
+                    # Check if next event is a continuation of this one, if true then skip next event
+                    if next_event.end_time == current_event.end_time and next_event.subject == current_event.subject:
+                        a += 4
+    
+                    # Define previous event
+                    prev_event = deepcopy(current_event)
+    
+                    a += 1
+            
+            else:
+                # If lines[a] isn't the correct time format, but still passes the if test
                 a += 1
-        
-        else:
-            # If lines[a] isn't the correct time format, but still passes the if test
+        except ValueError as e:
+            # Expected, happens on non-time lines
             a += 1
-    except ValueError as e:
-        # Expected, happens on non-time lines
-        a += 1
-        continue
-    except Exception as e:
-        # Unexpected errors
-        print("Error: {e}")
-        a += 1
+            continue
+        except Exception as e:
+            # Unexpected errors
+            print("Error: {e}")
+            a += 1
 
 print("done")
 

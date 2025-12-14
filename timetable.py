@@ -202,12 +202,7 @@ for i in range(5):
                     # Defines date string in iCalendar format
                     date_str = current_date.strftime("%d.%m.%Y")
     
-    
-                    # Show info about event
-                    # current_event.showInfo()
-    
                     # Generate vevent block. As long as the current event starts after the previous event ended, the program adds an alarm. 
-                    current_event.showInfo()
                     if current_event.start_time > prev_event.end_time:
                         if type(current_event.location) == str:
                             vevent = [

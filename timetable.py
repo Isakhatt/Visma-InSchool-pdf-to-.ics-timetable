@@ -97,28 +97,29 @@ doc = pymupdf.open(pdf_path)
 
 lines = []
 
+page: pymupdf.Page = doc[0]
+page_rect = page.rect
+width = page_rect.width
+height = page_rect.height
+rectangles = []
 
-for i in range(len(doc)):
-    page: pymupdf.Page = doc[i]
+y = 50 # Distance from top to remove
 
-    # Define columns to read text from, each representing their own weekday
-    page_rect = page.rect
-    width = page_rect.width
-    height = page_rect.height
-    rectangles = []
+rectangles.append(pymupdf.Rect(0, y, round(width/5), height))
+rectangles.append(pymupdf.Rect(round(width/5), y, round(width/5)*2, height))
+rectangles.append(pymupdf.Rect(round(width/5)*2, y, round(width/5)*3, height))
+rectangles.append(pymupdf.Rect(round(width/5)*3, y, round(width/5)*4, height))
+rectangles.append(pymupdf.Rect(round(width/5)*4, y, round(width/5)*5, height))
 
-    y = 50 # Distance from top to remove
 
-    rectangles.append(pymupdf.Rect(0, y, round(width/5), height))
-    rectangles.append(pymupdf.Rect(round(width/5), y, round(width/5)*2, height))
-    rectangles.append(pymupdf.Rect(round(width/5)*2, y, round(width/5)*3, height))
-    rectangles.append(pymupdf.Rect(round(width/5)*3, y, round(width/5)*4, height))
-    rectangles.append(pymupdf.Rect(round(width/5)*4, y, round(width/5)*5, height))
 
-    for rect in rectangles:
+for a, rect in enumerate(rectangles):
+    lines.append([])
+    for b in range(len(doc)):
+        page: pymupdf.Page = doc[b]
         text = page.get_textbox(rect)
-        lines.append(text.splitlines()) # Split the text into lines for processing
-        # Each lesson is assumed to span 4 lines: time | location, subject, code, type
+        for line in text.splitlines(): # Split the text into lines for processing. Each lesson is assumed to span 4 lines: time | location, subject, code, type
+            lines[a].append(line) 
 
 
 # Define first date in timetable
@@ -128,7 +129,7 @@ page_rect.y1 = 20
 header = page.get_textbox(page_rect)
 header = header.split(" - ")
 
-start_date = datetime.datetime.strptime(header[-1], r'%d.%m.%Y') - datetime.timedelta(days=datetime.datetime.strptime(header[-1], r'%d.%m.%Y').weekday())
+start_date_week = datetime.datetime.strptime(header[-1], r'%d.%m.%Y') - datetime.timedelta(days=datetime.datetime.strptime(header[-1], r'%d.%m.%Y').weekday())
 
 # Prepare timestamp for DTSTAMP field (convert to right format)
 timestamp = datetime.datetime.strftime(datetime.datetime.now(datetime.timezone.utc), r'%Y%m%dT%H%M%SZ') 
@@ -143,13 +144,13 @@ for i in range(5):
     next_event = prev_event
 
     # Add days to start_date
-    current_date = start_date + datetime.timedelta(days=i)
+    current_date = start_date_week + datetime.timedelta(days=i)
 
     a = 0
     while a < len(lines[i]) - 1:
         # Check if the first four letters are in time format; two numbers, colon, two numbers
         try: 
-            if type(int(lines[i][a][0] + lines[i][a][1] + lines[i][a][3] + lines[i][a][4])) == int and lines[i][a][2] == ":":
+            if lines[i][a][2] == ":":
                 # Define location, start_time, end_time and subject
                 if "|" in lines[i][a]:
                     time_range, location = lines[i][a].split("|")
@@ -167,16 +168,17 @@ for i in range(5):
                 # Check for duplicate event (after combining events)
                 if current_event.endMinutesPastMidnight() == prev_event.endMinutesPastMidnight() and current_event.subject == prev_event.subject:
                     a += 1
+
                 else: 
-    
                     # Find next event block
                     b = a + 2
                     while b < len(lines[i]) - 1:
                         try:
-                            if type(int(lines[i][b][0] + lines[i][b][1] + lines[i][b][3] + lines[i][b][4])) == int and lines[i][b][2] == ":":
+                            if lines[i][b][2] == ":":
                                 if "|" in lines[i][b]:
                                     time_range, location = lines[i][b].split("|")
                                     location = location.strip()
+
                                 else:
                                     time_range = lines[i][b]
                                     location = None
@@ -196,14 +198,6 @@ for i in range(5):
                     if current_event.end_time == next_event.start_time and current_event.subject == next_event.subject:
                         # Extend the current event to the end of the next
                         current_event.end_time = next_event.end_time
-                    
-    
-                    # Add 45 minutes if the class is 45 minutes long and the last of the day or the last day of the timetable. This is in case the pdf is longer than 1 page and follows the class system of Norwegian high schools
-                    # Seeing if there is not a next event block in the list first (in case there is an error reading the next event of the block that does not exist)
-                    if len(lines[i]) - a < 5:
-                        current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
-                    elif next_event.start_time < current_event.start_time and current_event.endMinutesPastMidnight() - current_event.startMinutesPastMidnight() < 90:
-                        current_event.end_time = (datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.strptime(current_event.end_time, '%H:%M').time()) + datetime.timedelta(minutes=45)).time().strftime('%H:%M')
     
                     # Defines date string in iCalendar format
                     date_str = current_date.strftime("%d.%m.%Y")

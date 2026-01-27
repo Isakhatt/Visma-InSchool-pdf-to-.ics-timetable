@@ -103,7 +103,7 @@ width = page_rect.width
 height = page_rect.height
 rectangles = []
 
-y = 50 # Distance from top to remove
+y = 40 # Distance from top to remove
 
 rectangles.append(pymupdf.Rect(0, y, round(width/5), height))
 rectangles.append(pymupdf.Rect(round(width/5), y, round(width/5)*2, height))
